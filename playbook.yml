@@ -1,0 +1,74 @@
+
+  - hosts: all
+    become: yes
+    tasks:
+      - name: Add a user
+        user:
+          name: ansible-worker
+          state: present
+          shell: /bin/bash
+
+      - name: Install Git
+        apt:
+          name: git
+          state: present
+
+      - name: Add an ssh key
+        ansible.posix.authorized_key:
+          user: ansible-worker
+          key: "{{ lookup('file', 'ssh_keys/id_rsa.pub') }}"
+          path: /home/ansible-worker/.ssh/id_rsa.pub
+         
+      - name: Create a group
+        file:
+          path: "/home/ansible-worker"
+          owner: www-data
+          group: ansible-worker
+
+      - name: Clone a repository
+        git:
+          repo: https://github.com/iphilka/stud-template.git
+          dest: /home/ansible-worker/www/stud-template
+          clone: yes
+          update: yes
+          force: yes
+
+      - name: Copy index.html
+        copy:
+          src: index.html
+          dest: /home/ansible-worker/www/stud-template/index.html
+          owner: ansible-worker
+          group: ansible-worker
+          mode: '0644'
+
+      - name: Install nginx
+        apt:
+          name: nginx
+          state: present
+
+      - name: Copy config file
+        copy:
+          src: files/ansible.iphilka.ru.conf
+          dest: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+          owner: root
+          group: root
+          mode: '0644'
+
+      - name: Create a symlink
+        file:
+          src: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+          dest: /etc/nginx/sites-enabled/ansible.iphilka.ru.conf
+          state: link
+
+      - name: Set access for nginx
+        file:
+          path: /home/ansible-worker/www
+          owner: www-data
+          group: ansible-worker
+          mode: '0755'
+        become: yes
+
+      - name: Restart nginx
+        service:
+          name: nginx
+          state: restarted
